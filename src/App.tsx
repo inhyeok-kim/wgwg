@@ -15,8 +15,6 @@ const initBlocks : Array<BlockType> = [
     }
 ]
 
-const saveBlocks = {...initBlocks};
-
 function App(){
     const [blocks, setBlocks] = useState(initBlocks);
     
@@ -27,8 +25,8 @@ function App(){
             text : text,
             isCreatedByEnter : true
         }
-        newBlocks.splice(newBlocks.findIndex(block=> block.id === id ? true : false)+1,0,newBlock);
-        
+        const idx = newBlocks.findIndex(block=> block.id === id ? true : false);
+        newBlocks.splice(idx+1,0,newBlock);
         setBlocks(newBlocks);
     }
 

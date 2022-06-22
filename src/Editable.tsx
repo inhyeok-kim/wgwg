@@ -12,10 +12,13 @@ export default function Editable({id, text, readonly = false, onEnter = ()=>{}, 
     const div = useRef<HTMLDivElement>(null);
     useEffect(()=>{
         if(div.current){
-            div.current.innerText = text;
-            if(isCreatedByEnter) div.current.focus();
+            div.current.innerHTML = text.replaceAll('\n','<br>');
         }
     }, [text]);
+    
+    useEffect(()=>{
+        if(isCreatedByEnter) div.current?.focus();
+    },[]);
 
     function onInput(e:any){
         const event = e.nativeEvent;
@@ -31,6 +34,8 @@ export default function Editable({id, text, readonly = false, onEnter = ()=>{}, 
         cursorSetting(e);
         if(e.code === 'Enter'){
             if(isShift){
+                e.preventDefault();
+                fnLineEnter();
             } else {
                 e.preventDefault();
                 fnEnter();
@@ -82,12 +87,21 @@ export default function Editable({id, text, readonly = false, onEnter = ()=>{}, 
         cursorEnd = Math.max(anchor?anchor:0, focus?focus:0);
     }
 
+    function fnLineEnter(){
+        console.log(cursorStart, cursorEnd);
+        const text = div.current?.innerText;
+        const newText = text!.substring(0,cursorStart) + '<br>' + text!.substring(cursorEnd, text!.length);
+        if(div.current){
+            div.current.innerHTML = newText;
+        }
+    }
+
     function fnEnter(){
         const text = div.current?.innerText;
         const newText = text!.substring(0,cursorStart);
         const enterText = text!.substring(cursorEnd, text!.length);
         if(div.current){
-            div.current.innerText = newText;
+            div.current.innerHTML = newText;
         }
         onEnter(enterText);
     }
