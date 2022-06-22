@@ -1,26 +1,54 @@
-import React from 'react';
-import logo from './logo.svg';
-import './App.css';
+import { useState } from "react";
+import Editable from "./Editable";
 
-function App() {
-  return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.tsx</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
-  );
+interface BlockType {
+    id : string
+    text : string
+    isCreatedByEnter : boolean
+}
+
+const initBlocks : Array<BlockType> = [
+    {
+        id : uid(),
+        text : 'hi\n?',
+        isCreatedByEnter : false
+    }
+]
+
+const saveBlocks = {...initBlocks};
+
+function App(){
+    const [blocks, setBlocks] = useState(initBlocks);
+    
+    function onEnter(id : string, text : string){
+        const newBlocks = [...blocks];
+        const newBlock:BlockType = {
+            id : uid(),
+            text : text,
+            isCreatedByEnter : true
+        }
+        newBlocks.splice(newBlocks.findIndex(block=> block.id === id ? true : false)+1,0,newBlock);
+        
+        setBlocks(newBlocks);
+    }
+
+    return (
+        <div className="app">
+            {blocks.map(block=>{
+                return (<Editable 
+                        key={block.id} 
+                        id={block.id} 
+                        text={block.text} 
+                        onEnter={(text:string)=>{onEnter(block.id,text)}} 
+                        isCreatedByEnter={block.isCreatedByEnter} />)
+            })}
+        </div>
+    )
 }
 
 export default App;
+
+
+function uid(){
+    return Date.now().toString(36) + Math.random().toString(36).substr(2);
+};
