@@ -10,17 +10,20 @@ const initBlocks : Array<BlockStateType> = [
     }
 ]
 const saveBlocks = [...initBlocks];
-
+let focusTarget = '';
+let focusIndex = [0,0];
 function Editor(){
     const [blocks, setBlocks] = useState(initBlocks);
     const editor = useRef<HTMLDivElement>(null);
-    const [createdBlockId, setCreatedBlockId] = useState('');
+    const [focusId, setFocusId] = useState('');
 
     useEffect(()=>{
-        if(createdBlockId){
-            moveSelection(createdBlockId,0,0);
+        if(focusId){
+            moveSelection(focusId,focusIndex[0],focusIndex[1]);
+            focusTarget = '';
+            focusIndex = [0,0];
         }
-    },[createdBlockId])
+    },[focusId]);
 
     function doAction(action:ActionType|Array<ActionType>){
         let actionList : Array<ActionType> = [];
@@ -44,18 +47,23 @@ function Editor(){
                 default:
                     break;
             }
-            
         });
+        setBlocks([...saveBlocks]);
+        setFocusId(focusTarget);
     }
 
     function fnInsertAction(action : ActionType){
         fnCreateNewBlock(action.id, action.data!);
     }
     function fnDeleteAction(action : ActionType){
-
+        fnDeleteBlock(action.id);
     }
     function fnUpdateAction(action : ActionType){
+        fnUpdateBlock(action.id, action.data!);
+    }
 
+    function onInput(e:React.FormEvent){
+        // console.log(e);
     }
 
     function onKeyUp(e:React.KeyboardEvent){
@@ -63,29 +71,40 @@ function Editor(){
     }
 
     function onKeyDown(e:React.KeyboardEvent){
-        console.log(document.getSelection());
         // console.log(e.code);
-        switch (e.code) {
-            case "Enter":
-                fnEnter(e);
-                break;
-            default:
-                break;
+        if(e.nativeEvent.isComposing){
+            e.preventDefault();
+        } else {
+            switch (e.code) {
+                case "Backspace":
+                    fnBackspace(e);
+                    break
+                case "Enter":
+                    fnEnter(e);
+                    break;
+                default:
+                    break;
+            }
         }
     }
 
-    function fnEnter(e:React.KeyboardEvent){
-        e.preventDefault();
+    function getSelectionRange(){
         const selection = document.getSelection();
-        const anchor = selection?.anchorNode?.parentElement;
-        const focus = selection?.focusNode?.parentElement;
+        let anchor = selection?.anchorNode;
+        let focus = selection?.focusNode;
+        if(anchor?.nodeName !== 'DIV'){
+            anchor = anchor?.parentElement;
+        }
+        if(focus?.nodeName !== 'DIV'){
+            focus = focus?.parentElement;
+        }
         let startId='';
         let endId='';
         let startOffset =0;
         let endOffset=0;
         if(anchor === focus){
-            startId = anchor?.getAttribute('data-block-id')!;
-            endId = anchor?.getAttribute('data-block-id')!;
+            startId = anchor?.dataset.blockId;
+            endId = anchor?.dataset.blockId;
             startOffset = selection?.anchorOffset!;
             endOffset = selection?.focusOffset!;
         } else {
@@ -93,40 +112,119 @@ function Editor(){
             for(let i=0; i<_blocks.length;i++){
                 const _block = _blocks[i];
     
-                if(_block.getAttribute('data-block-id') === anchor?.getAttribute('data-block-id')){
-                    startId = anchor?.getAttribute('data-block-id')!;
-                    endId = focus?.getAttribute('data-block-id')!;
+                if(_block.dataset.blockId === anchor?.dataset.blockId){
+                    startId = anchor?.dataset.blockId!;
+                    endId = focus?.dataset.blockId!;
                     startOffset = selection?.anchorOffset!;
                     endOffset = selection?.focusOffset!;
                     break;
                 }
-                if(_block.getAttribute('data-block-id') === focus?.getAttribute('data-block-id')){
-                    startId = focus?.getAttribute('data-block-id')!;
-                    endId = anchor?.getAttribute('data-block-id')!;
+                if(_block.dataset.blockId === focus?.dataset.blockId){
+                    startId = focus?.dataset.blockId!;
+                    endId = anchor?.dataset.blockId!;
                     endOffset = selection?.anchorOffset!;
                     startOffset = selection?.focusOffset!;
                     break;
                 }
             }
         }
+        return {startId, endId, startOffset, endOffset};
+    }
+
+    function fnBackspace(e:React.KeyboardEvent){
+        const selection = document.getSelection();
+        let isNotUpdate = false;
+        if(selection?.anchorNode != selection?.focusNode){
+            isNotUpdate = true;
+        } else if(selection?.focusOffset === 0 && selection.anchorOffset === 0){
+            isNotUpdate = true;
+        }
+
+        if(isNotUpdate){
+            e.preventDefault();
+            const sr = getSelectionRange();
+
+            const actionList : Array<ActionType> = [];
+            if(sr.startId === sr.endId){
+                const act : ActionType = {
+                    id : sr.startId,
+                    type : "delete"
+                }
+                actionList.push(act);
+                const prevIdx = saveBlocks.findIndex((block)=> block.id === sr.startId ? true : false) -1;
+                if(prevIdx >= 0) {
+                    focusTarget = saveBlocks[prevIdx].id
+                } else {
+                    return false;
+                }
+                
+                focusIndex = [saveBlocks[prevIdx].text.length,saveBlocks[prevIdx].text.length];
+            } else {
+                const startText = editor.current?.querySelector('div[data-block-id='+sr.startId+']')?.innerHTML;
+                const endText = editor.current?.querySelector('div[data-block-id='+sr.endId+']')?.innerHTML;
+                const newStartText = startText!.substring(0,sr.startOffset) + endText!.substring(sr.endOffset,endText?.length);
+                const act : ActionType = {
+                    id : sr.startId,
+                    type : "update",
+                    data : {text : newStartText}
+                }
+                actionList.push(act);
+
+                let isTarget = false;
+                for(let i=0; i<saveBlocks.length;i++){
+                    if(saveBlocks[i].id === sr.startId) {
+                        isTarget = true;
+                        continue;
+                    }
+                    if(saveBlocks[i].id === sr.endId){
+                        isTarget = false;
+                        break;
+                    }
+                    if(isTarget){
+                        const act :ActionType = {
+                            id : saveBlocks[i].id,
+                            type : 'delete'
+                        }
+                        actionList.push(act);
+                    }
+                }
+                
+                const act2 : ActionType = {
+                    id : sr.endId,
+                    type : "delete"
+                }
+                actionList.push(act2);
+                focusTarget = sr.startId;
+
+                focusIndex = [sr.startOffset,sr.startOffset];
+            }
+
+            doAction(actionList);
+        }
+
+    }
+
+    function fnEnter(e:React.KeyboardEvent){
+        e.preventDefault();
+        const sr = getSelectionRange();
 
         const actionList : Array<ActionType> = [];
         let newBlockText = '';
-        if(startId === endId){
-            const text = editor.current?.querySelector('div[data-block-id='+startId+']')?.innerHTML;
-            const newText = text? text.substring(0,startOffset) : '';
+        if(sr.startId === sr.endId){
+            const text = editor.current?.querySelector('div[data-block-id='+sr.startId+']')?.innerHTML;
+            const newText = text? text.substring(0,sr.startOffset) : '';
             const act : ActionType = {
-                id : startId,
+                id : sr.startId,
                 type : "update",
                 data : {text : newText }
             }
             actionList.push(act);
-            newBlockText = text? text.substring(endOffset,text!.length) : '';
+            newBlockText = text? text.substring(sr.endOffset,text!.length) : '';
         } else {
-            const startText = editor.current?.querySelector('div[data-block-id='+startId+']')?.innerHTML;
-            const newStartText = startText!.substring(0,startOffset);
+            const startText = editor.current?.querySelector('div[data-block-id='+sr.startId+']')?.innerHTML;
+            const newStartText = startText!.substring(0,sr.startOffset);
             const act : ActionType = {
-                id : startId,
+                id : sr.startId,
                 type : "update",
                 data : {text : newStartText}
             }
@@ -134,11 +232,11 @@ function Editor(){
 
             let isTarget = false;
             for(let i=0; i<saveBlocks.length;i++){
-                if(saveBlocks[i].id === startId) {
+                if(saveBlocks[i].id === sr.startId) {
                     isTarget = true;
                     continue;
                 }
-                if(saveBlocks[i].id === endId){
+                if(saveBlocks[i].id === sr.endId){
                     isTarget = false;
                     break;
                 }
@@ -151,10 +249,10 @@ function Editor(){
                 }
             }
 
-            const endText = editor.current?.querySelector('div[data-block-id='+endId+']')?.innerHTML;
-            newBlockText = endText!.substring(endOffset,endText?.length);
+            const endText = editor.current?.querySelector('div[data-block-id='+sr.endId+']')?.innerHTML;
+            newBlockText = endText!.substring(sr.endOffset,endText?.length);
             const act2 : ActionType = {
-                id : endId,
+                id : sr.endId,
                 type : "delete"
             }
             actionList.push(act2);
@@ -164,17 +262,29 @@ function Editor(){
         if(newBlockText === ''){
             newBlockText = '\r';
         }
+        const newId = uid();
         actionList.push({
-            id : startId,
+            id : sr.startId,
             type : "insert",
             data : {
-                id : uid(),
+                id : newId,
                 text : newBlockText
             },
         });
 
+        focusTarget = newId;
         doAction(actionList);
 
+    }
+
+    function fnUpdateBlock(id:string, data : ActionDataType){
+        const orgBlcok = saveBlocks.find(block=> block.id === id ? true : false);
+        orgBlcok!.text = data.text ? data.text : '\r';
+    }
+
+    function fnDeleteBlock(id:string){
+        const idx = saveBlocks.findIndex(block=> block.id === id ? true : false);
+        saveBlocks.splice(idx,1);
     }
 
     function fnCreateNewBlock(id:string, data : ActionDataType){
@@ -185,8 +295,6 @@ function Editor(){
         }
         const idx = saveBlocks.findIndex(block=> block.id === id ? true : false);
         saveBlocks.splice(idx+1,0,newBlock);
-        setBlocks([...saveBlocks]);
-        setCreatedBlockId(data.id!);
     }
 
     function moveSelection(targetId:string,start:number, end:number){
@@ -212,6 +320,7 @@ function Editor(){
             style={{whiteSpace: 'pre-wrap', wordBreak: 'break-word'}}
             onKeyDown={(e)=>{onKeyDown(e)}}
             onKeyUp={(e)=>{onKeyUp(e)}}
+            onInput={(e)=>{onInput(e)}}
         >
             {blocks.map(block=>{
                 return (<EditableBlock 

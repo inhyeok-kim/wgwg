@@ -20,3 +20,7 @@ interface ActionDataType {
     id? : string
     text? : string
 }
+
+interface Node {
+    dataset : any
+}
