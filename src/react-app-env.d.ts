@@ -14,6 +14,7 @@ interface ActionType{
     start? : number
     end? : number
     data? : ActionDataType
+    noRender? : boolean
 }
 
 interface ActionDataType {
@@ -23,4 +24,8 @@ interface ActionDataType {
 
 interface Node {
     dataset : any
+}
+
+interface Event{
+    data : any
 }
