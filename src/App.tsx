@@ -2,84 +2,74 @@ import { useState } from "react";
 // import Editable from "./Editable";
 import Editor from "./Editor";
 
-interface BlockType {
-    id : string
-    text : string
-    isFocus : boolean
-}
-
-const initBlocks : Array<BlockType> = [
-    {
-        id : uid(),
-        text : '\r',
-        isFocus : false
-    }
-]
-
-const saveBlocks = [...initBlocks];
-
+let ws : WebSocket;
 function App(){
-    const [blocks, setBlocks] = useState(initBlocks);
-    
-    // function onAction(id : string, act : actionType){
-    //     switch (act.type) {
-    //         case "Enter":
-    //             // createNewBlock(id, act);
-    //             // break;
-    //         // case "Backspace":
-    //         //     removeBlock(id, act);
-    //         //     break;
-    //         case "Input":
-    //             inputBlock(id,act);
-    //             break;
-    //         default:
-    //             break;
-    //     }
-    // }
+    const [page, setPage] = useState();
+    const [actionList, setActionList] = useState();
 
-    // function createNewBlock(id : string, act : actionType){
-    //     const newBlock:BlockType = {
-    //         id : uid(),
-    //         text : act.data,
-    //         isFocus : true
-    //     }
-    //     const idx = saveBlocks.findIndex(block=> block.id === id ? true : false);
-    //     saveBlocks.splice(idx+1,0,newBlock);
-    //     setBlocks([...saveBlocks]);
-    // }
+    function connect(){
+        ws = new WebSocket('ws://192.168.123.48:4000');
+        ws.onopen = function(){
+            console.log('socket connected');
+            ws.onmessage = function(message){
+                onMessage(message.data);
+            }
+            login(ws);
+        }
+    }
 
-    // function removeBlock(id : string, act : actionType){
-    //     const idx = saveBlocks.findIndex(block=> block.id === id ? true : false);
-    //     if(idx > 0){
-    //         saveBlocks[idx-1].text += act.data;
-    //         saveBlocks[idx-1].isFocus = true;
-    //         saveBlocks.splice(idx,1);
-    //         setBlocks([...saveBlocks]);
-    //     }
-    // }
+    function login(ws : WebSocket){
+        const loginInfo = {
+            method : 'login',
+            data : uid()
+        }
+        ws.send(JSON.stringify(loginInfo));
+    }
 
-    // function inputBlock(id : string, act : actionType){
-    //     const idx = saveBlocks.findIndex(block=> block.id === id ? true : false);
-    //     saveBlocks[idx].text = act.data;
-    // }
+    function onMessage(message:any){
+        const event = JSON.parse(message);
+        const method = event.method;
+        switch (method) {
+            case "page_init":
+                pageInit(event.data);           
+                break;
+            case 'action':
+                receiveAction(event.data);
+                break;
+            default:
+                break;
+        }
+    }
+
+    function receiveAction(actionList :any){
+        setActionList(actionList);
+    }
+
+    function pageInit(pageData:any){
+        setPage(pageData);
+    }
+
+    function onAction(actionList : Array<ActionType>){
+        const message = {
+            method : 'action',
+            data : actionList
+        };
+        ws.send(JSON.stringify(message));
+    }
 
     return (
-        <Editor />
-        // <div className="app" contentEditable={true}>
-        //     {blocks.map(block=>{
-        //         return (<Editable 
-        //                 key={block.id} 
-        //                 id={block.id} 
-        //                 text={block.text} 
-        //                 onAction={(act:actionType)=>{onAction(block.id,act)}} 
-        //                 isFocus={block.isFocus} />)
-        //     })}
-        // </div>
+        <>
+            <button onClick={connect}>접속하기</button>
+            {page ? 
+                (<Editor initPage={page} onAction={(actionList : Array<ActionType>)=>onAction(actionList)} actionList={actionList!} />)
+                :
+                ''
+            }
+        </>
     )
 }
 
 export default App;
-
 
 function uid(){
     return Date.now().toString(36) + Math.random().toString(36).substr(2);

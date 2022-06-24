@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import styled from "styled-components";
 import EditableBlock from "./EditableBlock";
 
@@ -9,7 +9,7 @@ const initBlocks : Array<BlockStateType> = [
         isFocus : false
     }
 ]
-const saveBlocks = [...initBlocks];
+
 let focusTarget = '';
 let focusIndex = [0,0];
 let customSelection : {
@@ -32,58 +32,87 @@ let compositionState = {
     afterText : '',
     mergeReady : false
 }
-function Editor(){
-    const [blocks, setBlocks] = useState(initBlocks);
+
+interface EditorProp{
+    initPage : Array<BlockStateType>
+    onAction : Function
+    actionList : Array<ActionType>
+}
+function Editor({
+    initPage, onAction, actionList
+}:EditorProp){
+    const [blocks, setBlocks] = useState(initPage);
     const editor = useRef<HTMLDivElement>(null);
-    const [focusId, setFocusId] = useState('');
+    const [focusId, setFocusId] = useState(['','']);
     
-    // useEffect(()=>{
-    //     if(first){
-    //         editor.current?.addEventListener('beforeinput',fnBeforeInput);
-    //     }
-    //     first = false;
-    // },[]);
+    const saveBlocks = useMemo(()=>{
+        return initPage;
+    },[initPage]);
 
     useEffect(()=>{
-        if(focusId){
-            moveSelection(focusId,focusIndex[0],focusIndex[1]);
+        if(first){
+            editor.current?.addEventListener('beforeinput',fnBeforeInput);
+        }
+        first = false;
+    },[]);
+
+    useEffect(()=>{
+        if(actionList){
+            setTimeout(()=>{doAction(actionList, true)},0);
+        }
+    }, [actionList]);
+
+    useEffect(()=>{
+        if(focusId[0] && focusId[1]){
+            moveSelection(focusId[0],focusId[1],focusIndex[0],focusIndex[1]);
         }
     },[focusId]);
 
-    function doAction(action:ActionType|Array<ActionType>){
+    function doAction(action:ActionType|Array<ActionType>,isRemote:boolean = false){
         let actionList : Array<ActionType> = [];
         if("id" in action){
             actionList.push(action);
         } else {
             actionList = [...action];
         }
-
+        if(!isRemote){
+            onAction(actionList);
+        }
+        const sr = {...getSelectionRange()};
         actionList.forEach((action)=>{
             switch (action.type) {
                 case "insert":
                     fnInsertAction(action);
                     setBlocks([...saveBlocks]);
-                    setFocusId(focusTarget);
-                    console.log(saveBlocks);
+                    if(!isRemote){
+                        setFocusId([focusTarget,focusTarget]);
+                    }
                     break;
                 case "delete":
                     fnDeleteAction(action);
                     setBlocks([...saveBlocks]);
-                    setFocusId(focusTarget);
-                    console.log(saveBlocks);
+                    if(!isRemote){
+                        setFocusId([focusTarget,focusTarget]);
+                    }
                     break;
                 case "update":
                     fnUpdateAction(action);
-                    if(!action.noRender){
+                    if(!action.noRender || isRemote){
                         setBlocks([...saveBlocks]);
-                        setFocusId(focusTarget);
-                        console.log(saveBlocks);
+                        if(!isRemote){
+                            setFocusId([focusTarget,focusTarget]);
+                        }
                     }
                     break;
                 default:
                     break;
             }
         });
+        if(isRemote){
+            setFocusId([getSelectionRange().startId,getSelectionRange().endId]);
+            focusIndex = [sr.startOffset, sr.endOffset];
+        }
+        
     }
 
     function fnInsertAction(action : ActionType){
@@ -219,7 +248,7 @@ function Editor(){
             const text = editor.current?.querySelector('div[data-block-id='+customSelection.anchorId+']')?.innerHTML;
             editor.current!.querySelector('div[data-block-id='+customSelection.anchorId+']')!.innerHTML = text!;
             compositionState.mergeReady = false;
-            moveSelection(customSelection.anchorId, customSelection.anchorOffset, customSelection.anchorOffset);
+            moveSelection(customSelection.anchorId, customSelection.anchorId, customSelection.anchorOffset, customSelection.anchorOffset);
         }
     }
 
@@ -541,17 +570,22 @@ function Editor(){
         saveBlocks.splice(idx+1,0,newBlock);
     }
 
-    function moveSelection(targetId:string,start:number, end:number){
+    function moveSelection(startId:string, endId:string,start:number, end:number){
         const selection = document.getSelection()!;
         const range = selection!.getRangeAt(0);
         const newRange = range!.cloneRange();
-        const target = editor.current?.querySelector(`div[data-block-id=${targetId}`);
-        if(target?.firstChild){
-            newRange.setStart(target.firstChild,start);
-            newRange.setEnd(target.firstChild,end);
+        const startTarget = editor.current?.querySelector(`div[data-block-id=${startId}`);
+        const endTarget = editor.current?.querySelector(`div[data-block-id=${endId}`);
+        
+        if(startTarget?.firstChild){
+            newRange.setStart(startTarget.firstChild,start);
         } else {
-            newRange.setStart(target!,start);
-            newRange.setEnd(target!,end);
+            newRange.setStart(startTarget!,start);
+        }
+        if(endTarget?.firstChild){
+            newRange.setEnd(endTarget.firstChild,end);
+        } else {
+            newRange.setEnd(endTarget!,end);
         }
         selection?.removeAllRanges();
         selection?.addRange(newRange);
