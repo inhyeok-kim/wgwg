@@ -8,7 +8,7 @@ function App(){
     const [actionList, setActionList] = useState();
 
     function connect(){
-        ws = new WebSocket('ws://192.168.123.48:4000');
+        ws = new WebSocket('ws://192.168.10.107:4000');
         ws.onopen = function(){
             console.log('socket connected');
             ws.onmessage = function(message){

@@ -13,12 +13,12 @@ const initBlocks : Array<BlockStateType> = [
 let focusTarget = '';
 let focusIndex = [0,0];
 let customSelection : {
-    anchorNode: any
-    anchorId : any
-    anchorOffset: any
-    focusNode: any
-    focusId: any
-    focusOffset: any
+    anchorNode?: any
+    anchorId? : any
+    anchorOffset?: any
+    focusNode?: any
+    focusId?: any
+    focusOffset?: any
 } = {
     anchorNode : '',
     focusNode : '',
@@ -29,6 +29,8 @@ let customSelection : {
 }
 let first = true;
 let compositionState = {
+    needUpdateBefore : false,
+    isEnd : true,
     afterText : '',
     mergeReady : false
 }
@@ -78,7 +80,6 @@ function Editor({
         if(!isRemote){
             onAction(actionList);
         }
-        const sr = {...getSelectionRange()};
         actionList.forEach((action)=>{
             switch (action.type) {
                 case "insert":
@@ -109,8 +110,9 @@ function Editor({
             }
         });
         if(isRemote){
-            setFocusId([getSelectionRange().startId,getSelectionRange().endId]);
+            const sr = getSelectionRange();
             focusIndex = [sr.startOffset, sr.endOffset];
+            setFocusId([sr.startId,sr.endId]);
         }
         
     }
@@ -152,7 +154,7 @@ function Editor({
 
     function onKeyDown(e:React.KeyboardEvent){
         // console.log(e);
-        setSelection();
+        // setSelection();
         if(e.nativeEvent.isComposing){
             e.preventDefault();
         } else {
@@ -240,10 +242,32 @@ function Editor({
     }
 
     function fnCompositionUpdate(e:any){
-        
+        console.log('update');
+        if(compositionState.needUpdateBefore){
+            const sr = getSelectionRange();
+            // const actionList : Array<ActionType> = [];
+            const startText = editor.current?.querySelector('div[data-block-id='+sr.startId+']')!.innerHTML!;
+            const newStartText = startText?.substring(0,sr.startOffset-1) + startText?.substring(sr.endOffset,startText.length);
+            editor.current!.querySelector('div[data-block-id='+sr.startId+']')!.innerHTML = newStartText;
+            // console.log('1'+newStartText);
+            // compositionState.mergeReady = true;
+            // const act : ActionType = {
+            //     id : sr.startId,
+            //     type : "update",
+            //     data : {text : newStartText},
+            //     noRender : true
+            // }
+            // actionList.push(act);
+            
+            // doAction(actionList);
+            // moveSelection(customSelection.anchorId, customSelection.anchorId, customSelection.anchorOffset-1, customSelection.anchorOffset-1);
+            // compositionState.needUpdateBefore = false;
+        }
     }
-
+    
     function fnCompositionEnd(e:any){
+        console.log('end');
+        compositionState.isEnd = true;
         if(compositionState.mergeReady){
             const text = editor.current?.querySelector('div[data-block-id='+customSelection.anchorId+']')?.innerHTML;
             editor.current!.querySelector('div[data-block-id='+customSelection.anchorId+']')!.innerHTML = text!;
@@ -251,8 +275,15 @@ function Editor({
             moveSelection(customSelection.anchorId, customSelection.anchorId, customSelection.anchorOffset, customSelection.anchorOffset);
         }
     }
-
+    
     function fnCompositionStart(e:any){
+        console.log('start');
+        if(compositionState.isEnd){
+            compositionState.isEnd = false;
+        } else {
+            compositionState.needUpdateBefore = true;
+        }
+        
         if(customSelection.anchorNode !== customSelection.focusNode){
             const sr = getSelectionRange();
                 
@@ -322,19 +353,44 @@ function Editor({
             doAction(actionList);
 
         } else {
-            const sr = getSelectionRange();
+            if(compositionState.needUpdateBefore){
+                const sr = getSelectionRange();
+                const startText = editor.current?.querySelector('div[data-block-id='+sr.startId+']')!.innerHTML!;
+                console.log('2'+startText);
+                // const sr = getSelectionRange();
+                // console.log(sr);
+                // const actionList : Array<ActionType> = [];
+                // const startText = editor.current?.querySelector('div[data-block-id='+sr.startId+']')!.innerHTML!;
+                // const newStartText = startText?.substring(0,sr.startOffset-2) + startText?.substring(sr.endOffset-1,startText.length);
+                // editor.current!.querySelector('div[data-block-id='+sr.startId+']')!.innerHTML = newStartText;
+                // compositionState.mergeReady = true;
+                // const act : ActionType = {
+                //     id : sr.startId,
+                //     type : "update",
+                //     data : {text : newStartText},
+                //     noRender : true
+                // }
+                // actionList.push(act);
                 
-            const actionList : Array<ActionType> = [];
-            const startText = editor.current?.querySelector('div[data-block-id='+sr.startId+']')?.innerHTML;
-            const newStartText = startText;
-            const act : ActionType = {
-                id : sr.startId,
-                type : "update",
-                data : {text : newStartText},
-                noRender : true
+                // doAction(actionList);
+                moveSelection(customSelection.anchorId, customSelection.anchorId, customSelection.anchorOffset-1, customSelection.anchorOffset-1);
+                compositionState.needUpdateBefore = false;
             }
-            actionList.push(act);
-            doAction(actionList);
+            else {
+                const sr = getSelectionRange();
+                    
+                const actionList : Array<ActionType> = [];
+                const startText = editor.current?.querySelector('div[data-block-id='+sr.startId+']')?.innerHTML;
+                const newStartText = startText;
+                const act : ActionType = {
+                    id : sr.startId,
+                    type : "update",
+                    data : {text : newStartText},
+                    noRender : true
+                }
+                actionList.push(act);
+                doAction(actionList);
+            }
         }
     }
 
@@ -556,8 +612,12 @@ function Editor({
     }
 
     function fnDeleteBlock(id:string){
-        const idx = saveBlocks.findIndex(block=> block.id === id ? true : false);
-        saveBlocks.splice(idx,1);
+        if(saveBlocks.length === 1){
+            saveBlocks[0].text = '';
+        } else {
+            const idx = saveBlocks.findIndex(block=> block.id === id ? true : false);
+            saveBlocks.splice(idx,1);
+        }
     }
 
     function fnCreateNewBlock(id:string, data : ActionDataType){
@@ -571,30 +631,54 @@ function Editor({
     }
 
     function moveSelection(startId:string, endId:string,start:number, end:number){
+        console.log(startId,endId,start,end);
         const selection = document.getSelection()!;
         const range = selection!.getRangeAt(0);
         const newRange = range!.cloneRange();
         const startTarget = editor.current?.querySelector(`div[data-block-id=${startId}`);
         const endTarget = editor.current?.querySelector(`div[data-block-id=${endId}`);
-        
-        if(startTarget?.firstChild){
-            newRange.setStart(startTarget.firstChild,start);
-        } else {
-            newRange.setStart(startTarget!,start);
-        }
-        if(endTarget?.firstChild){
-            newRange.setEnd(endTarget.firstChild,end);
-        } else {
-            newRange.setEnd(endTarget!,end);
+        try {
+            if(startTarget?.firstChild){
+                newRange.setStart(startTarget.firstChild,start);
+            } else {
+                newRange.setStart(startTarget!,start);
+            }
+            if(endTarget?.firstChild){
+                newRange.setEnd(endTarget.firstChild,end);
+            } else {
+                newRange.setEnd(endTarget!,end);
+            }
+        } catch (error) {
+            console.log(startTarget);
+            if(startTarget){
+                if(startTarget.firstChild){
+                    console.log('1');
+                    newRange.setStart(startTarget.firstChild,startTarget.innerHTML.length);
+                    newRange.setEnd(startTarget.firstChild!,startTarget.innerHTML.length);
+                } else {
+                    console.log('2');
+                    newRange.setStart(startTarget!,startTarget.innerHTML.length);
+                    newRange.setEnd(startTarget!,startTarget.innerHTML.length);
+                }
+            } else {
+                console.log('3');
+                newRange.setStart(editor.current!.firstChild!,0);
+                newRange.setEnd(editor.current!.firstChild!,0);
+            }
         }
         selection?.removeAllRanges();
         selection?.addRange(newRange);
+        setSelection();
         focusTarget = '';
         focusIndex = [0,0];
     }
 
     function getData(){
         console.log(saveBlocks);
+    }
+    
+    function onSelect(e:any){
+        setSelection();
     }
 
     return (
@@ -610,6 +694,7 @@ function Editor({
                 onCompositionStart={(e)=>{onCompositionStart(e)}}
                 onCompositionEnd={(e)=>{onCompositionEnd(e)}}
                 onCompositionUpdate={(e)=>{onCompositionUpdate(e)}}
+                onSelect={onSelect}
                 // onBeforeInput={(e)=>{onBeforeInput(e)}}
             >
                 {blocks.map(block=>{
