@@ -5,7 +5,9 @@ function EditableBlock({id, text, readonly = false, onAction = ()=>{}, isFocus=f
 
     const div = useRef<HTMLDivElement>(null);
     useEffect(()=>{
-        div.current!.innerHTML = text;
+        if(!isFocus){
+            div.current!.innerHTML = text;
+        }
     }, [text]);
 
     return (

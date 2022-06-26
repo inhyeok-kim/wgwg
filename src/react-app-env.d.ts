@@ -22,6 +22,15 @@ interface ActionDataType {
     text? : string
 }
 
+interface SelectionType{
+    anchorNode? : any
+    focusNode? : any
+    anchorId : string
+    focusId : string
+    anchorOffset : number
+    focusOffset : number
+}
+
 interface Node {
     dataset : any
 }
