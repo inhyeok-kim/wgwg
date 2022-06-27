@@ -23,6 +23,10 @@ function Editor({
     initPage, onAction, actionList
 }:EditorProp){
     const [blocks, setBlocks] = useState(initPage);
+    useEffect(()=>{
+        noRenderBlockId = '';
+        setBlocks(initPage);
+    },[initPage]);
     const editor = useRef<HTMLDivElement>(null);
     useEffect(()=>{
         if(actionList){
@@ -34,11 +38,14 @@ function Editor({
         if(newSelection){
             moveSelection(newSelection.anchorId,newSelection.focusId,newSelection.anchorOffset,newSelection.focusOffset);
             newSelection = null!;
+            settingCurrentSelection();
         }
     }, [blocks]);
+
     const saveBlocks = useMemo(()=>{
         return [...initPage];
     },[initPage]);
+    
     function getData(){
         console.log(saveBlocks);
     }
@@ -75,7 +82,7 @@ function Editor({
 
         const idx = saveBlocks.findIndex(block=> block.id === action.id ? true : false);
         saveBlocks.splice(idx+1,0,newBlockData);
-        if(!isRemote){
+        if(!isRemote && currentSelection){
             setNextSelection(newBlockData.id,newBlockData.id,0,0);
         }
         setBlocks([...saveBlocks]);
@@ -95,7 +102,7 @@ function Editor({
         const orgBlcok = saveBlocks.find(block=> block.id === action.id ? true : false);
         orgBlcok!.text = action.data!.text ? action.data!.text === '<br>' ? '' : action.data!.text : '';
         if(isRemote){
-            if(currentSelection.anchorId === action.id){
+            if(currentSelection && currentSelection.anchorId === action.id){
                 noRenderBlockId = '';
                 setNextSelection(action.id,action.id,orgBlcok!.text.length,orgBlcok!.text.length);
             }
@@ -106,13 +113,13 @@ function Editor({
     function fnDeleteAction(action : ActionType, isRemote : boolean){
         if(saveBlocks.length === 1){
             saveBlocks[0].text = '';
-            if(isRemote && currentSelection.anchorId === action.id){
+            if(isRemote && currentSelection && currentSelection.anchorId === action.id){
                 setNextSelection(saveBlocks[0].id,saveBlocks[0].id,0,0);
             }
         } else {
             const idx = saveBlocks.findIndex(block=> block.id === action.id ? true : false);
             saveBlocks.splice(idx,1);
-            if(isRemote && currentSelection.anchorId === action.id){
+            if(isRemote && currentSelection && currentSelection.anchorId === action.id){
                 const id = saveBlocks[idx-1].id;
                 const length = saveBlocks[idx-1].text.length
                 setNextSelection(id,id,length,length);
@@ -124,7 +131,7 @@ function Editor({
     function fnBeforeInput(e:any){
         const selection = currentSelection;
         let isNotUpdate = false;
-        if(selection?.anchorNode !== selection?.focusNode){
+        if(selection?.anchorId !== selection?.focusId){
             isNotUpdate = true;
         }
         if(isNotUpdate){
@@ -178,12 +185,12 @@ function Editor({
     function fnBackspace(e:React.KeyboardEvent){
         const selection = currentSelection;
         let isNotUpdate = false;
-        if(selection?.anchorNode !== selection?.focusNode){
+        if(selection?.anchorId !== selection?.focusId){
             isNotUpdate = true;
         } else if(selection?.focusOffset === 0 && selection.anchorOffset === 0){
             isNotUpdate = true;
         }
-
+        
         if(isNotUpdate){
             e.preventDefault();
             const sr = getSelectionRange();
@@ -247,7 +254,7 @@ function Editor({
                 actionList.push(act2);
                 setNextSelection(sr.startId,sr.startId,sr.startOffset,sr.startOffset);
             }
-            // noRenderBlockId = '';
+            noRenderBlockId = '';
             doAction(actionList);
         }
 
@@ -317,6 +324,7 @@ function Editor({
             
             doAction(actionList);
             compositionState.needUpdateBefore = false;
+            compositionState.mergeReady = true;
         }
     }
     
@@ -324,7 +332,7 @@ function Editor({
         if(compositionState.mergeReady){
             const text = saveBlocks.find((block)=> block.id === currentSelection.anchorId ? true : false)?.text;
             editor.current!.querySelector('div[data-block-id='+currentSelection.anchorId+']')!.innerHTML = text!;
-            moveSelection(currentSelection.anchorId, currentSelection.anchorId, currentSelection.anchorOffset+1, currentSelection.anchorOffset+1);
+            moveSelection(currentSelection.anchorId, currentSelection.anchorId, currentSelection.anchorOffset, currentSelection.anchorOffset);
             compositionState.mergeReady = false;
         }
     }
@@ -350,8 +358,7 @@ function Editor({
 
     }
     function onInput(e:React.FormEvent){
-        console.log(e);
-        if(currentSelection.anchorNode !== currentSelection.focusNode){
+        if(currentSelection.anchorId !== currentSelection.focusId){
 
         } else {
             if(e.nativeEvent.data === '\u001d'){
@@ -361,7 +368,7 @@ function Editor({
                         
                 const actionList : Array<ActionType> = [];
                 const startText = editor.current?.querySelector('div[data-block-id='+sr.startId+']')?.innerHTML;
-                const newStartText = startText;
+                const newStartText = startText?.replaceAll('<br>','');
                 const act : ActionType = {
                     id : sr.startId,
                     type : "update",
@@ -383,18 +390,14 @@ function Editor({
     }
 
     function onCompositionEnd(e:any){
-        console.log('end');
         fnCompositionEnd(e);
     }
     
     function onCompositionStart(e:any){
-        console.log('start');
         fnCompositionStart(e);
     }
     
     function onCompositionUpdate(e:any){
-        console.log('update');
-        console.log(e.nativeEvent);
         fnCompositionUpdate(e);
     }
 
@@ -488,7 +491,6 @@ function Editor({
         e.preventDefault();
 
         const sr = getSelectionRange();
-
         const actionList : Array<ActionType> = [];
         let newBlockText = '';
         if(sr.startId === sr.endId){
@@ -560,7 +562,6 @@ function Editor({
         const newRange = range!.cloneRange();
         const startTarget = editor.current?.querySelector(`div[data-block-id=${startId}`);
         const endTarget = editor.current?.querySelector(`div[data-block-id=${endId}`);
-
         if(startTarget?.firstChild){
             newRange.setStart(startTarget.firstChild,start);
         } else {
@@ -574,11 +575,12 @@ function Editor({
 
         selection?.removeAllRanges();
         selection?.addRange(newRange);
+        
     }
 
     return (
         <>
-            <button onClick={getData}>데이터 출력</button>
+            {/* <button onClick={getData}>데이터 출력</button> */}
             <EditorDiv 
                 ref={editor}
                 contentEditable={true}

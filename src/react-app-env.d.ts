@@ -1,5 +1,10 @@
 /// <reference types="react-scripts" />
 
+interface PageType {
+    id : string
+    text : string
+    pageData : Array<BlockStateType>
+}
 interface BlockStateType{
     id : string
     text : string
