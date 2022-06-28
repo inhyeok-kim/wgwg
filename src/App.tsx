@@ -99,18 +99,18 @@ function App(){
                 {/* <button onClick={connect}>접속하기</button> */}
             </Header>
             <Aside>
-                <button onClick={addPage}>+ 새 페이지</button>
-                <ul>
+                <Button className={"new_page"} onClick={addPage}>+ 새 페이지</Button>
+                <PageUl>
                     {pageList ? 
                         pageList.map((page:PageType)=>{
-                            return <li key={page.id} onClick={()=>{setCurrentPage(page)}}
+                            return <PageLi key={page.id} onClick={()=>{setCurrentPage(page)}}
                                 style={{cursor:'pointer'}}
-                            >{page.text}</li>
+                            >{page.text}</PageLi>
                         })
                         :
                         ''
                     }
-                </ul>
+                </PageUl>
             </Aside>
             <Page>
                 {currentPage ? 
@@ -146,15 +146,53 @@ const Header = styled.div`
 `;
 
 const Aside = styled.div`
-    width : 20%;
+    width : 15%;
     height: 100vh;
     border-right: 1px solid #f1f1d4;
     background-color: ivory;
 `;
 
 const Page = styled.div`
-    width : 80%;
+    width : 85%;
     height: 100vh;
     padding : 10px;
 `
+const Button = styled.button`
+    &.new_page {
+        width: 100%;
+        cursor: pointer;
+        background: none;
+        border: none;
+        font-size: 1rem;
+        padding : 5px 0px;
+    }
+    &.new_page:hover{
+        background: #80808016;
+    }
+`
 
+const PageUl = styled.ul`
+    padding : 0px;
+`;
+const PageLi = styled.li`
+    display: flex;
+    position: relative;
+    height : 30px;
+    list-style : none;
+    padding-left: 30px;
+    align-items: center;
+
+    &:hover{
+        background: #80808016;
+    }
+    &:hover::after{
+        content : '';
+        position: absolute;
+        width: 6px;
+        height: 6px;
+        border-top : 1px solid grey;
+        border-right: 1px solid grey;
+        right: 10px;
+        transform: rotateZ(45deg);
+    }
+`;

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import styled from 'styled-components';
 
-function EditableBlock({id, text, readonly = false, onAction = ()=>{}, isFocus=false} : BlockStateType){
+function EditableBlock({id, text, readonly = false, onAction = ()=>{}, isFocus=false, isPlaceholder = false} : BlockStateType){
 
     const div = useRef<HTMLDivElement>(null);
     useEffect(()=>{
@@ -14,6 +14,7 @@ function EditableBlock({id, text, readonly = false, onAction = ()=>{}, isFocus=f
         <Block
             ref={div}
             data-block-id={id}
+            placeholder={isPlaceholder? 'type anything...' : ''}
         >
         </Block>
     )
@@ -25,5 +26,11 @@ const Block = styled.div`
     height : 1.5rem;
     &:focus{
         background-color: black;
+    }
+
+    &:empty:before{
+        content: attr(placeholder);
+        color : #8a8a8a;
+        cursor: text;
     }
 `

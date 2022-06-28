@@ -11,6 +11,7 @@ interface BlockStateType{
     readonly? : boolean
     onAction? : Function
     isFocus? : boolean
+    isPlaceholder? : boolean
 }
 
 interface ActionType{
@@ -42,4 +43,8 @@ interface Node {
 
 interface Event{
     data : any
+}
+
+interface DataTransfer{
+    editorData : any
 }

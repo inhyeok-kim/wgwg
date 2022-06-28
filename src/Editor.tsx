@@ -13,6 +13,8 @@ let compositionState = {
     mergeReady : false
 }
 
+let copyList : Array<any> = [];
+
 interface EditorProp{
     initPage : Array<BlockStateType>
     onAction : Function
@@ -82,7 +84,7 @@ function Editor({
 
         const idx = saveBlocks.findIndex(block=> block.id === action.id ? true : false);
         saveBlocks.splice(idx+1,0,newBlockData);
-        if(!isRemote && currentSelection){
+        if(!isRemote && currentSelection && !newSelection){
             setNextSelection(newBlockData.id,newBlockData.id,0,0);
         }
         setBlocks([...saveBlocks]);
@@ -106,8 +108,8 @@ function Editor({
                 noRenderBlockId = '';
                 setNextSelection(action.id,action.id,orgBlcok!.text.length,orgBlcok!.text.length);
             }
-            setBlocks([...saveBlocks]);
         } 
+        setBlocks([...saveBlocks]);
     }
 
     function fnDeleteAction(action : ActionType, isRemote : boolean){
@@ -389,6 +391,196 @@ function Editor({
         settingCurrentSelection();
     }
 
+    function onPaste(e:React.ClipboardEvent){
+        e.preventDefault();
+        const event = e.nativeEvent;
+
+        if(copyList){
+            const sr = {...getSelectionRange()};
+            const actionList = [];
+            if(sr.startId !== sr.endId){
+                let currentId = document.querySelector(`[data-block-id=${sr.startId}]`)?.nextElementSibling?.dataset.blockId;
+                while (currentId != sr.endId){
+                    const act :ActionType = {
+                        id : currentId,
+                        type : 'delete'
+                    }
+                    actionList.push(act);
+                    currentId = document.querySelector(`[data-block-id=${currentId}]`)?.nextElementSibling?.dataset.blockId;
+                }
+            } 
+
+            if(sr.startId === sr.endId){ // 복사할 곳이 한줄일 경우
+                if(copyList.length === 1){ // 복사할게 한줄일 경우
+                    copyList.forEach((copy)=>{
+                        const text = document.querySelector(`[data-block-id=${sr.startId}]`)?.innerHTML;
+                        const newText = text?.substring(0,sr.startOffset) + copy + text?.substring(sr.endOffset,text.length);
+                        document.querySelector(`[data-block-id=${sr.startId}]`)!.innerHTML = newText;
+                        const newOffset = (text?.substring(0,sr.startOffset) + copy).length;
+                        const act :ActionType = {
+                            id : sr.startId,
+                            type : 'update',
+                            data : {
+                                text : newText
+                            }
+                        }
+                        actionList.push(act);
+                        setNextSelection(sr.startId,sr.startId,newOffset,newOffset);
+                    });
+                } else { // 여러줄 삽입일 경우
+                    let currentId = sr.startId;
+                    let endText = '';
+                    copyList.forEach((copy,i)=>{
+                        const text = document.querySelector(`[data-block-id=${currentId}]`)?.innerHTML;
+                        if(i === 0){
+                            const newText = text?.substring(0,sr.startOffset) + copy;
+                            endText = text!.substring(sr.endOffset,text!.length);
+                            document.querySelector(`[data-block-id=${currentId}]`)!.innerHTML = newText;
+                            const act :ActionType = {
+                                id : currentId,
+                                type : 'update',
+                                data : {
+                                    text : newText
+                                }
+                            }
+                            actionList.push(act);
+                        } else if(i === copyList.length-1){
+                            const newText = copy + endText;
+                            const newId = uid();
+                            const act :ActionType = {
+                                id : currentId,
+                                type : 'insert',
+                                data : {
+                                    id : newId,
+                                    text : newText
+                                }
+                            }
+                            actionList.push(act);
+                            currentId = newId;
+                            setNextSelection(currentId,currentId,copy.length,copy.length);
+                            console.log(newSelection);
+                        } else {
+                            const newId = uid();
+                            const act :ActionType = {
+                                id : currentId,
+                                type : 'insert',
+                                data : {
+                                    id : newId,
+                                    text : copy
+                                }
+                            }
+                            actionList.push(act);
+                            currentId = newId;
+                        }
+                    });
+                }
+            } else { // 복사할 곳이 여러줄 일 경우
+                if(copyList.length === 1){ // 복사할게 한줄일 경우
+                    copyList.forEach((copy)=>{
+                        const startText = document.querySelector(`[data-block-id=${sr.startId}]`)?.innerHTML;
+                        const endText = document.querySelector(`[data-block-id=${sr.endId}]`)?.innerHTML;
+                        const newText = startText?.substring(0,sr.startOffset) + copy + endText?.substring(sr.endOffset,endText.length);
+                        document.querySelector(`[data-block-id=${sr.startId}]`)!.innerHTML = newText;
+                        const newOffset = (startText?.substring(0,sr.startOffset) + copy).length;
+                        const act :ActionType = {
+                            id : sr.startId,
+                            type : 'update',
+                            data : {
+                                text : newText
+                            }
+                        }
+                        actionList.push(act);
+                        const act2 :ActionType = {
+                            id : sr.endId,
+                            type : 'delete'
+                        }
+                        actionList.push(act2);
+                        setNextSelection(sr.startId,sr.startId,newOffset,newOffset);
+                    });
+                } else { // 여러줄 삽입일 경우
+                    let currentId = sr.startId;
+                    copyList.forEach((copy,i)=>{
+                        const text = document.querySelector(`[data-block-id=${currentId}]`)?.innerHTML;
+                        if(i === 0){
+                            const newText = text?.substring(0,sr.startOffset) + copy;
+                            document.querySelector(`[data-block-id=${currentId}]`)!.innerHTML = newText;
+                            const act :ActionType = {
+                                id : currentId,
+                                type : 'update',
+                                data : {
+                                    text : newText
+                                }
+                            }
+                            actionList.push(act);
+                        } else if(i === copyList.length-1){
+                            const endText = document.querySelector(`[data-block-id=${sr.endId}]`)?.innerHTML;
+                            const newText = copy + endText?.substring(sr.endOffset,endText.length);
+                            document.querySelector(`[data-block-id=${sr.endId}]`)!.innerHTML = newText;
+                            const act :ActionType = {
+                                id : sr.endId,
+                                type : 'update',
+                                data : {
+                                    text : newText
+                                }
+                            }
+                            actionList.push(act);
+                            setNextSelection(sr.endId,sr.endId,copy.length,copy.length);
+                        } else {
+                            const newId = uid();
+                            const act :ActionType = {
+                                id : currentId,
+                                type : 'insert',
+                                data : {
+                                    id : newId,
+                                    text : copy
+                                }
+                            }
+                            actionList.push(act);
+                            currentId = newId;
+                        }
+                    });
+                }
+            }
+            noRenderBlockId = sr.startId;
+            console.log(actionList);
+            doAction(actionList);
+        }
+    }
+
+    function onCopy(e:React.ClipboardEvent){
+        const sr = getSelectionRange();
+        let currentId = sr.startId;
+        const copy = [];
+        let isEnd = false;
+        do {
+            const currentNode = document.querySelector(`[data-block-id=${currentId}]`);
+            let text = currentNode?.innerHTML;
+            if(currentId === sr.startId){
+                if(sr.startId === sr.endId){
+                    text = text?.substring(sr.startOffset, sr.endOffset);
+                    isEnd = true;
+                } else {
+                    text = text?.substring(sr.startOffset, text.length);
+                    const next = currentNode?.nextElementSibling;
+                    if(next){
+                        currentId = next.dataset.blockId;
+                    }
+                }
+            } else if(currentId === sr.endId) {
+                text = text?.substring(0,sr.endOffset);
+                isEnd = true;
+            } else {
+                const next = currentNode?.nextElementSibling;
+                if(next){
+                    currentId = next.dataset.blockId;
+                }
+            }
+            copy.push(text);
+        } while (!isEnd);
+        copyList = copy;
+        
+    }
+
     function onCompositionEnd(e:any){
         fnCompositionEnd(e);
     }
@@ -590,15 +782,18 @@ function Editor({
                 onInput={onInput}
                 onBeforeInput={onBeforeInput}
                 onSelect={onSelect}
+                onPaste={onPaste}
+                onCopy={onCopy}
                 onCompositionStart={(e)=>{onCompositionStart(e)}}
                 onCompositionEnd={(e)=>{onCompositionEnd(e)}}
                 onCompositionUpdate={(e)=>{onCompositionUpdate(e)}}
             >
-                {blocks.map(block=>{
+                {blocks.map((block,i)=>{
                     return (<EditableBlock 
                             key={block.id} 
                             id={block.id} 
                             text={block.text}
+                            isPlaceholder={i===0 && blocks.length === 1}
                             isFocus={block.id === noRenderBlockId}
                              />)
                 })}
