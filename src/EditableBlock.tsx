@@ -23,7 +23,7 @@ function EditableBlock({id, text, readonly = false, onAction = ()=>{}, isFocus=f
 export default EditableBlock;
 
 const Block = styled.div`
-    height : 1.5rem;
+    min-height : 1.5rem;
     &:focus{
         background-color: black;
     }

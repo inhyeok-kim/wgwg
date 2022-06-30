@@ -12,8 +12,7 @@ let compositionState = {
     afterText : '',
     mergeReady : false
 }
-
-let copyList : Array<any> = [];
+let needMoveNewSelection = false;
 
 interface EditorProp{
     initPage : Array<BlockStateType>
@@ -39,7 +38,9 @@ function Editor({
     useEffect(()=>{
         if(newSelection){
             moveSelection(newSelection.anchorId,newSelection.focusId,newSelection.anchorOffset,newSelection.focusOffset);
-            newSelection = null!;
+            if(!needMoveNewSelection){
+                newSelection = null!;
+            }
             settingCurrentSelection();
         }
     }, [blocks]);
@@ -102,7 +103,7 @@ function Editor({
 
     function fnUpdateAction(action : ActionType,isRemote : boolean){
         const orgBlcok = saveBlocks.find(block=> block.id === action.id ? true : false);
-        orgBlcok!.text = action.data!.text ? action.data!.text === '<br>' ? '' : action.data!.text : '';
+        orgBlcok!.text = action.data!.text ? action.data!.text.replaceAll('<br>','') : '';
         if(isRemote){
             if(currentSelection && currentSelection.anchorId === action.id){
                 noRenderBlockId = '';
@@ -115,17 +116,12 @@ function Editor({
     function fnDeleteAction(action : ActionType, isRemote : boolean){
         if(saveBlocks.length === 1){
             saveBlocks[0].text = '';
-            if(isRemote && currentSelection && currentSelection.anchorId === action.id){
-                setNextSelection(saveBlocks[0].id,saveBlocks[0].id,0,0);
-            }
         } else {
             const idx = saveBlocks.findIndex(block=> block.id === action.id ? true : false);
             saveBlocks.splice(idx,1);
-            if(isRemote && currentSelection && currentSelection.anchorId === action.id){
-                const id = saveBlocks[idx-1].id;
-                const length = saveBlocks[idx-1].text.length
-                setNextSelection(id,id,length,length);
-            }
+        }
+        if(isRemote && currentSelection && currentSelection.anchorId === action.id){
+            document.getSelection()?.removeAllRanges();
         }
         setBlocks([...saveBlocks]);
     }
@@ -303,7 +299,7 @@ function Editor({
                 type : "delete"
             }
             actionList.push(act2);
-            setNextSelection(sr.startId,sr.startId,sr.startOffset,sr.startOffset)
+            setNextSelection(sr.startId,sr.startId,sr.startOffset,sr.startOffset);
             doAction(actionList);
             
         }
@@ -388,19 +384,29 @@ function Editor({
     }
 
     function onSelect(e: React.BaseSyntheticEvent){
+        // if(document.getSelection()?.anchorNode !== currentSelection.anchorNode){
+            //     moveSelection(currentSelection.anchorId, currentSelection.focusId, currentSelection.anchorOffset, currentSelection.focusOffset);
+            // } else {
+        if(needMoveNewSelection){
+            moveSelection(newSelection.anchorId,newSelection.focusId,newSelection.anchorOffset,newSelection.focusOffset);
+            needMoveNewSelection = false;
+        }
+        newSelection = null!;
         settingCurrentSelection();
+        // }
     }
 
     function onPaste(e:React.ClipboardEvent){
         e.preventDefault();
         const event = e.nativeEvent;
+        let copyList = event.clipboardData!.getData('text').replaceAll('\r','').split('\n');
 
         if(copyList){
             const sr = {...getSelectionRange()};
             const actionList = [];
             if(sr.startId !== sr.endId){
                 let currentId = document.querySelector(`[data-block-id=${sr.startId}]`)?.nextElementSibling?.dataset.blockId;
-                while (currentId != sr.endId){
+                while (currentId !== sr.endId){
                     const act :ActionType = {
                         id : currentId,
                         type : 'delete'
@@ -457,8 +463,8 @@ function Editor({
                             }
                             actionList.push(act);
                             currentId = newId;
+                            needMoveNewSelection = true;
                             setNextSelection(currentId,currentId,copy.length,copy.length);
-                            console.log(newSelection);
                         } else {
                             const newId = uid();
                             const act :ActionType = {
@@ -541,44 +547,12 @@ function Editor({
                     });
                 }
             }
-            noRenderBlockId = sr.startId;
-            console.log(actionList);
+            
             doAction(actionList);
         }
     }
 
     function onCopy(e:React.ClipboardEvent){
-        const sr = getSelectionRange();
-        let currentId = sr.startId;
-        const copy = [];
-        let isEnd = false;
-        do {
-            const currentNode = document.querySelector(`[data-block-id=${currentId}]`);
-            let text = currentNode?.innerHTML;
-            if(currentId === sr.startId){
-                if(sr.startId === sr.endId){
-                    text = text?.substring(sr.startOffset, sr.endOffset);
-                    isEnd = true;
-                } else {
-                    text = text?.substring(sr.startOffset, text.length);
-                    const next = currentNode?.nextElementSibling;
-                    if(next){
-                        currentId = next.dataset.blockId;
-                    }
-                }
-            } else if(currentId === sr.endId) {
-                text = text?.substring(0,sr.endOffset);
-                isEnd = true;
-            } else {
-                const next = currentNode?.nextElementSibling;
-                if(next){
-                    currentId = next.dataset.blockId;
-                }
-            }
-            copy.push(text);
-        } while (!isEnd);
-        copyList = copy;
-        
     }
 
     function onCompositionEnd(e:any){
@@ -764,10 +738,8 @@ function Editor({
         } else {
             newRange.setEnd(endTarget!,end);
         }
-
         selection?.removeAllRanges();
         selection?.addRange(newRange);
-        
     }
 
     return (

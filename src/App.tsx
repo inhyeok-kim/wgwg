@@ -147,15 +147,17 @@ const Header = styled.div`
 
 const Aside = styled.div`
     width : 15%;
-    height: 100vh;
+    height: calc(100vh - 50px);
     border-right: 1px solid #f1f1d4;
     background-color: ivory;
+    overflow-y: auto;
 `;
 
 const Page = styled.div`
     width : 85%;
-    height: 100vh;
+    height: calc(100vh - 50px);
     padding : 10px;
+    overflow-y: auto;
 `
 const Button = styled.button`
     &.new_page {
